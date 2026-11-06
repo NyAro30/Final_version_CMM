@@ -1,0 +1,16 @@
+[
+  {
+    "prompt": "first_prompt",
+    "name": "name_1",
+    "parameters": {
+      "a": 10
+    }
+  },
+  {
+    "prompt": "second_prompt",
+    "name": "name_2",
+    "parameters": {
+      "a": 42
+    }
+  }
+]
