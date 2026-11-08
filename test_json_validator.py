@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/08 08:23:04 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/08 08:24:11 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/08 16:44:06 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -15,7 +15,11 @@ import json
 
 def is_valid_json(s: str) -> bool:
     """Return True if s is valid complete JSON, False otherwise."""
-    pass
+    try:
+        json.loads(s)
+        return True
+    except json.JSONDecodeError:
+        return False
 
 
 if __name__ == "__main__":
