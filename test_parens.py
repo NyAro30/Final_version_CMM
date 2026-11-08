@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/02 19:25:45 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/05 20:40:32 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/06 20:55:27 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -37,11 +37,11 @@ def valid_next_chars(partial: str) -> list[str]:
 
 
 if __name__ == "__main__":
-    print(is_balanceable(")("))     # Attendu: False
-    print(is_balanceable("))(("))   # Attendu: False
-    print(is_balanceable(")"))      # Attendu: False
-    print(is_balanceable("()"))     # Attendu: True  ← NE DOIT PAS CASSER
-    print(is_balanceable("(())"))   # Attendu: True
-    print(is_balanceable(""))       # Attendu: True  ← NE DOIT PAS CASSER
-    print(valid_next_chars(")"))    # Attendu: []
+    print(is_balanceable(")("))
+    print(is_balanceable("))(("))
+    print(is_balanceable(")"))
+    print(is_balanceable("()"))
+    print(is_balanceable("(())"))
+    print(is_balanceable(""))
+    print(valid_next_chars(")"))
     print(valid_next_chars("("))
