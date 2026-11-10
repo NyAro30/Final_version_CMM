@@ -7,11 +7,12 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/08 08:23:04 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/08 18:13:23 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/10 21:04:19 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 import json
+
 
 def is_valid_json(s: str) -> bool:
     """Return True if s is valid complete JSON, False otherwise."""
@@ -28,7 +29,44 @@ def is_valid_json_prefix(s: str) -> bool:
         return True
 
     suffixes = [
-        "}", "", "0}", "true}", "false}", "null}",
+
+        ': 0}',
+        ': ""}',
+        ': true}',
+        ': false}',
+        ': null}',
+        ': {}}',
+        ': []}',
+
+        "0",
+        "42",
+        "-1",
+        "true",
+        "false",
+        "null",
+        '""',
+        '"x"',
+        "}",
+        "{}",
+        "[]",
+
+        " 0}",
+
+        '": 0}',
+        '": ""}',
+        '": true}',
+        '": false}',
+        '": null}',
+        '": {}}',
+        '": []}',
+
+        ' "x": 0}',
+        ' "x": ""}',
+        ' "x": true}',
+
+        '""}',
+        '{}}',
+        '[]}',
     ]
 
     for suffix in suffixes:
