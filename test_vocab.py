@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/10 22:16:51 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/13 23:54:55 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/14 15:37:42 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -17,10 +17,10 @@ from llm_sdk.llm_sdk import Small_LLM_Model
 
 def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
     """Load the vocabulary as a dict {token_id: token_string}.
-    
+
     Args:
         model: The LLM model instance.
-    
+
     Returns:
         Dict mapping token IDs to their string representations.
     """
@@ -29,7 +29,6 @@ def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
         data = json.load(file)
     inverted = {value: key for key, value in data.items()}
     return inverted
-
 
 
 if __name__ == "__main__":
