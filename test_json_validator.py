@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/08 08:23:04 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/10 21:04:19 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/18 10:59:58 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -75,6 +75,25 @@ def is_valid_json_prefix(s: str) -> bool:
     return False
 
 
+def is_valid_json_object(s: str) -> bool:
+    """Return True if s is valid JSON AND parses to a dict."""
+    try:
+        result = json.loads(s)
+        return isinstance(result, dict)
+    except json.JSONDecodeError:
+        return False
+
+
+def is_valid_json_object_prefix(s: str) -> bool:
+    """Return True if s could be completed to a JSON object (dict)."""
+    stripped = s.lstrip()
+    if stripped == '':
+        return True
+    if stripped[0] == '{':
+        return is_valid_json_prefix(s)
+    return False
+
+
 if __name__ == "__main__":
     tests = [
         ('{"a": 1}', True),
@@ -95,7 +114,8 @@ if __name__ == "__main__":
     for s, expected in tests:
         result = is_valid_json(s)
         status = "OK" if result == expected else "FAIL"
-        print(f"{status}: is_valid_json({s!r}) = {result}, expected {expected}")
+        print(f"{status}: is_valid_json({s!r}) = {result},"
+              f" expected {expected}")
 
     print("=== Test suffix ===")
     prefix_tests = [
@@ -119,4 +139,5 @@ if __name__ == "__main__":
     for s, expected in prefix_tests:
         result = is_valid_json_prefix(s)
         status = "OK" if result == expected else "FAIL"
-        print(f"{status}: is_valid_json_prefix({s!r}) = {result}, expected {expected}")
+        print(f"{status}: is_valid_json_prefix({s!r}) ="
+              f" {result}, expected {expected}")
