@@ -6,27 +6,28 @@
 #                                                      +:+ +:+         +:+    #
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
-#   Created: 2026/11/07 21:29:27 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/07 23:46:44 by mny-aro-           ###   ########.fr      #
+#   Created: 2026/11/18 10:38:03 by mny-aro-            #+#    #+#            #
+#   Updated: 2026/11/18 10:40:01 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
+
 
 from llm_sdk.llm_sdk import Small_LLM_Model
 
 
 def generate(model: Small_LLM_Model, prompt: str, max_tokens: int = 20) -> str:
     """Generate text by repeatedly predicting the next token.
-    
+
     Args:
         model: The LLM model instance.
         prompt: The input prompt.
         max_tokens: Maximum number of tokens to generate.
-    
+
     Returns:
         The full text (prompt + generated tokens).
     """
     ids_tensor = model.encode(prompt)
-    
+
     ids_list = ids_tensor.tolist()[0]
 
     for i in range(max_tokens):
@@ -34,7 +35,8 @@ def generate(model: Small_LLM_Model, prompt: str, max_tokens: int = 20) -> str:
 
         token_id = logits.index(max(logits))
 
-        print(f"Step {i + 1}: token_id={token_id}, decoded={model.decode([token_id])!r}")
+        print(f"Step {i + 1}: token_id={token_id},"
+              f"decoded={model.decode([token_id])!r}")
         ids_list.append(token_id)
 
     return model.decode(ids_list)
