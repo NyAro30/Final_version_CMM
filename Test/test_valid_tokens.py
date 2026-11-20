@@ -7,13 +7,13 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/14 16:25:08 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 13:02:59 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 22:35:41 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 from llm_sdk.llm_sdk import Small_LLM_Model
-from test_json_validator import is_valid_json_object_prefix
-from test_vocab import load_vocab
+from Test.test_json_validator import is_valid_json_object_prefix
+from Test.test_vocab import load_vocab
 
 
 def valid_next_tokens(prefix: str, vocab: dict[int, str]) -> list[int]:

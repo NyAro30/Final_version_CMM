@@ -7,15 +7,15 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/18 14:47:30 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 19:41:00 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 22:35:41 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 import json
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
-from test_vocab import load_vocab
-from test_json_validator import is_valid_json
+from Test.test_vocab import load_vocab
+from Test.test_json_validator import is_valid_json
 from typing import Any
 
 

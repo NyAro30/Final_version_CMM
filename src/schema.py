@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 19:46:59 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/21 00:39:23 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -15,8 +15,8 @@
 import json
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
-from test_vocab import load_vocab
-from test_json_validator import is_valid_json
+# from .vocab import load_vocab
+from .validator import is_valid_json
 from typing import Any
 
 
@@ -40,19 +40,44 @@ def is_valid_number_prefix(s: str) -> bool:
 
 def is_valid_string_prefix(s: str) -> bool:
     """Return True if s could be a prefix of a valid JSON string."""
+
     if not s:
         return True
     if not s.startswith('"'):
         return False
 
-    try:
-        json.loads(s + '"')
-        return True
-    except json.JSONDecodeError:
+    i = 1
+    in_escape = False
 
-        if s.endswith('\\'):
+    while i < len(s):
+        c = s[i]
+
+        if in_escape:
+            if c not in '"\\/bfnrtu':
+                return False
+            if c == 'u':
+                hex_part = s[i + 1:i + 5]
+                if len(hex_part) < 4:
+                    return True
+                if not all(h in '0123456789abcdefABCDEF' for h in hex_part):
+                    return False
+                i += 5
+            else:
+                i += 1
+            in_escape = False
+        elif c == '\\':
+            in_escape = True
+            i += 1
+        elif c == '"':
+            if i + 1 < len(s):
+                return False
             return True
-        return False
+        elif ord(c) < 32:
+            return False
+        else:
+            i += 1
+
+    return True
 
 
 def generate_parameter_value(
@@ -81,10 +106,9 @@ def generate_parameter_value(
         logits = model.get_logits_from_input_ids(ids)
         value_prefix = model.decode(generated_ids)
 
-        valid = []
+        valid: list[int] = []
         for token_id, token_str in vocab.items():
-            clean_token = token_str.replace("Ġ", " ")
-            new_prefix = value_prefix + clean_token
+            new_prefix = value_prefix + token_str
 
             if param_type == "number":
                 if is_valid_number_prefix(new_prefix):
@@ -97,24 +121,32 @@ def generate_parameter_value(
             break
 
         valid_set = set(valid)
-        masked = [logits[j] if j in valid_set else float('-inf')
-                  for j in range(len(logits))]
+
+        if param_type == "number" and generated_ids:
+            unconstrained_argmax = logits.index(max(logits))
+            if unconstrained_argmax not in valid_set:
+                break
+
+        masked = [
+            logits[j] if j in valid_set else float('-inf')
+            for j in range(len(logits))
+        ]
         next_id = masked.index(max(masked))
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(f"Step {i+1}: token_id={next_id},"
-              f"decoded={model.decode([next_id])!r}")
+        print(
+            f"Step {i + 1}: token_id={next_id},"
+            f"decoded={model.decode([next_id])!r}"
+        )
 
-        value_prefix = model.decode(generated_ids)
-
-        if param_type == "number":
-            if value_prefix and is_valid_json(value_prefix):
+        if param_type == "string":
+            value_prefix = model.decode(generated_ids)
+            try:
+                json.loads(value_prefix)
                 break
-        elif param_type == "string":
-            if (value_prefix.startswith('"') and value_prefix.endswith('"') and
-               not value_prefix.endswith('\\')):
-                break
+            except json.JSONDecodeError:
+                pass
 
     return model.decode(generated_ids)
 
@@ -198,6 +230,20 @@ def load_functions(path: str) -> dict[str, dict]:
     return functions_dict
 
 
+def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
+    vocab_path = model.get_path_to_vocab_file()
+    with open(vocab_path, "r", encoding="utf-8") as f:
+        raw_vocab = json.load(f)
+
+    decoded: dict[int, str] = {}
+    total = len(raw_vocab)
+    for i, (token_str, token_id) in enumerate(raw_vocab.items()):
+        decoded[token_id] = model.decode([token_id])
+        if i % 10000 == 0:
+            print(f"Decoding vocab: {i}/{total}")
+    return decoded
+
+
 def generate_function_call(
     model: Small_LLM_Model,
     vocab: dict[int, str],
@@ -245,15 +291,17 @@ def generate_function_call(
                 f"Parameter '{prev_name}' = {prev_value}\n"
             )
 
-        prompt_param = (
-            f"Function: {name} ({fn_def['description']})\n"
-            f"    User request: {user_request}\n"
+        param_description = param_info.get(
+            "description",
+            f"Value for parameter {param_name}"
         )
 
-        for prev_name, prev_value in parameters.items():
-            prompt_param += (
-                f"    The value for parameter '{prev_name}' is {prev_value}.\n"
-            )
+        prompt_param += (
+            f"Parameter description: {param_description}\n"
+            f"Generate only the value for '{param_name}'.\n"
+            "Do not generate Python code or explanations.\n"
+            "Return a valid JSON value."
+        )
 
         prompt_param += (
             f"    Generate the value for parameter "
@@ -263,7 +311,11 @@ def generate_function_call(
         value_str = generate_parameter_value(
             model, vocab, prompt_param, param_type
         )
-        value: Any = json.loads(value_str)
+        
+        try:
+            value: Any = json.loads(value_str)
+        except json.JSONDecodeError:
+            print(f"Warning: could not parse value {value_str!r}")
+            value = value_str
         parameters[param_name] = value
-
     return {"name": name, "parameters": parameters}
