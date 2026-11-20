@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/18 14:47:30 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/18 16:02:57 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 10:09:06 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -26,7 +26,8 @@ def generate_function_name(
 ) -> str:
     """Generate a function name using the LLM, constrained to valid names.
 
-    At each step, only tokens that could continue a valid function name are allowed.
+    At each step, only tokens that could continue a valid function name are
+    allowed.
 
     Args:
         model: The LLM model instance.
@@ -39,15 +40,36 @@ def generate_function_name(
         The generated function name (must be one of function_names).
     """
 
-    prompt_ids = model.encode(prompt)
-    generated_ids = prompt_ids.tolist()[0]
-    
-    name_prefix = ""
+    ids = model.encode(prompt).tolist()[0]
+    generated_ids: list[int] = []
 
-    i = 0
     for i in range(max_tokens):
-        
+        logits = model.get_logits_from_input_ids(ids)
+        name_prefix = model.decode(generated_ids)
 
+        valid = []
+        for token_id, token_str in vocab.items():
+            clean = token_str.replace("Ġ", " ")
+            new_prefix = name_prefix + clean
+            if any(fn.startswith(new_prefix) for fn in function_names):
+                valid.append(token_id)
+
+        if not valid:
+            break
+
+        valid_set = set(valid)
+        masked = [logits[j] if j in valid_set else float('-inf') for j in range(len(logits))]
+        next_id = masked.index(max(masked))
+
+        ids.append(next_id)
+        generated_ids.append(next_id)
+        print(f"Step {i+1}: token_id={next_id}, decoded={model.decode([next_id])!r}")
+
+        name_prefix = model.decode(generated_ids)
+        if name_prefix in function_names:
+            break
+
+    return model.decode(generated_ids)
 
 
 def load_functions(path: str) -> dict[str, dict]:
@@ -74,9 +96,24 @@ def load_functions(path: str) -> dict[str, dict]:
 
 if __name__ == "__main__":
     functions = load_functions("data/input/functions_definition.json")
+    function_names = list(functions.keys())
 
-    print("Functions loaded:", len(functions))
-    for name, fn_def in functions.items():
-        params = fn_def.get("parameters", {})
-        param_types = {k: v["type"] for k, v in params.items()}
-        print(f"  {name}: params={param_types}")
+    model = Small_LLM_Model(device="cpu")
+    vocab = load_vocab(model)
+
+    prompt = """Available functions:
+- fn_add_numbers: Add two numbers together and return their sum.
+- fn_greet: Generate a greeting message for a person by name.
+- fn_reverse_string: Reverse a string and return the reversed result.
+- fn_get_square_root: Calculate the square root of a number.
+- fn_substitute_string_with_regex: Replace all occurrences matching a regex
+pattern in a string.
+
+User request: What is the sum of 2 and 3?
+
+Select the most appropriate function name:"""
+
+    name = generate_function_name(model, vocab, prompt, function_names)
+    print("---")
+    print("Selected function:", repr(name))
+    print("Is valid:", name in function_names)
