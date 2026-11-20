@@ -7,15 +7,15 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/17 08:34:38 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/18 11:00:32 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 22:35:41 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 import json
 from llm_sdk.llm_sdk import Small_LLM_Model
-from test_vocab import load_vocab
-from test_json_validator import is_valid_json_prefix, is_valid_json, is_valid_json_object, is_valid_json_object_prefix
-from test_valid_tokens import valid_next_tokens
+from Test.test_vocab import load_vocab
+from Test.test_json_validator import is_valid_json_prefix, is_valid_json, is_valid_json_object, is_valid_json_object_prefix
+from Test.test_valid_tokens import valid_next_tokens
 
 
 def generate_constrained(model: Small_LLM_Model, vocab: dict[int, str],
