@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/18 14:47:30 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 12:56:22 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 17:13:24 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -16,6 +16,7 @@ from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
 from test_vocab import load_vocab
 from test_json_validator import is_valid_json
+from typing import Any
 
 
 def is_valid_number_prefix(s: str) -> bool:
@@ -196,6 +197,77 @@ def load_functions(path: str) -> dict[str, dict]:
     return functions_dict
 
 
+def generate_function_call(
+    model: Small_LLM_Model,
+    vocab: dict[int, str],
+    functions: dict[str, dict],
+    user_request: str,
+    max_tokens: int = 20
+) -> dict:
+    """Generate a complete function call using constrained decoding.
+
+    1. Select function name (constrained to valid names).
+    2. For each parameter, generate value (constrained to type).
+    3. Assemble into {"name": ..., "parameters": {...}}.
+
+    Returns:
+        Dict with "name" and "parameters" keys.
+    """
+
+    function_names = list(functions.keys())
+
+    prompt_fn = ""
+    for fn_name, fn_def in functions.items():
+        desc: str = fn_def["description"]
+        prompt_fn += f"- {fn_name}: {desc}\n"
+    prompt_fn += (
+        f"\nUser request: {user_request}\n\n"
+        "Select the most appropriate function name:"
+    )
+
+    name = generate_function_name(model, vocab, prompt_fn, function_names)
+
+    fn_def = functions[name]
+    params: dict[str, Any] = fn_def.get("parameters", {})
+
+    parameters: dict[str, Any] = {}
+    for param_name, param_info in params.items():
+        param_type: str = param_info["type"]
+
+        prompt_param = (
+            f"Function: {name}\n"
+            f"User request: {user_request}\n"
+        )
+
+        for prev_name, prev_value in parameters.items():
+            prompt_param += (
+                f"Parameter '{prev_name}' = {prev_value}\n"
+            )
+
+        prompt_param = (
+            f"Function: {name} ({fn_def['description']})\n"
+            f"    User request: {user_request}\n"
+        )
+
+        for prev_name, prev_value in parameters.items():
+            prompt_param += (
+                f"    The value for parameter '{prev_name}' is {prev_value}.\n"
+            )
+
+        prompt_param += (
+            f"    Generate the value for parameter "
+            f"'{param_name}' (a {param_type}):"
+        )
+
+        value_str = generate_parameter_value(
+            model, vocab, prompt_param, param_type
+        )
+        value: Any = json.loads(value_str)
+        parameters[param_name] = value
+
+    return {"name": name, "parameters": parameters}
+
+
 if __name__ == "__main__":
     functions = load_functions("data/input/functions_definition.json")
     function_names = list(functions.keys())
@@ -236,3 +308,16 @@ Select the most appropriate function name:"""
 
     value_b = generate_parameter_value(model, vocab, prompt_b, "number")
     print("Value for 'b':", repr(value_b))
+
+    print()
+    print("=== Test fubnction Calling ===")
+
+    functions = load_functions("data/input/functions_definition.json")
+    model = Small_LLM_Model(device="cpu")
+    vocab = load_vocab(model)
+
+    result = generate_function_call(model, vocab, functions,
+                                    "What is the sum of 2 and 3?")
+    print("---")
+    print("Function call:", result)
+    print("JSON:", json.dumps(result))
