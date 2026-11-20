@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/18 14:47:30 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 17:13:24 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 19:41:00 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -23,13 +23,13 @@ def is_valid_number_prefix(s: str) -> bool:
     """Return True if s could be a prefix of a valid JSON number."""
     if not s:
         return True
-    # All chars must be valid number characters
+
     if not all(c in "0123456789.+-eE" for c in s):
         return False
-    # Must start with digit or minus
+
     if s[0] not in "0123456789-":
         return False
-    # Max one of each special char
+
     if s.count('-') > 1 or s.count('.') > 1:
         return False
     if s.lower().count('e') > 1:
@@ -40,15 +40,15 @@ def is_valid_number_prefix(s: str) -> bool:
 def is_valid_string_prefix(s: str) -> bool:
     """Return True if s could be a prefix of a valid JSON string."""
     if not s:
-        return True  # could start with "
+        return True
     if not s.startswith('"'):
         return False
-    # Try to complete and parse
+
     try:
         json.loads(s + '"')
         return True
     except json.JSONDecodeError:
-        # Might be in the middle of an escape sequence
+
         if s.endswith('\\'):
             return True
         return False
@@ -310,7 +310,7 @@ Select the most appropriate function name:"""
     print("Value for 'b':", repr(value_b))
 
     print()
-    print("=== Test fubnction Calling ===")
+    print("=== Test function Calling ===")
 
     functions = load_functions("data/input/functions_definition.json")
     model = Small_LLM_Model(device="cpu")
