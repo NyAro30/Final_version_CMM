@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/18 14:47:30 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/20 10:09:06 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/20 10:18:35 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -58,12 +58,14 @@ def generate_function_name(
             break
 
         valid_set = set(valid)
-        masked = [logits[j] if j in valid_set else float('-inf') for j in range(len(logits))]
+        masked = [logits[j] if j in valid_set else float('-inf')
+                  for j in range(len(logits))]
         next_id = masked.index(max(masked))
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(f"Step {i+1}: token_id={next_id}, decoded={model.decode([next_id])!r}")
+        print(f"Step {i+1}: token_id={next_id},"
+              f"decoded={model.decode([next_id])!r}")
 
         name_prefix = model.decode(generated_ids)
         if name_prefix in function_names:
