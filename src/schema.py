@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/21 00:39:23 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/22 19:14:29 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -15,7 +15,7 @@
 import json
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
-# from .vocab import load_vocab
+from .vocab import load_vocab
 from .validator import is_valid_json
 from typing import Any
 
@@ -140,6 +140,12 @@ def generate_parameter_value(
             f"decoded={model.decode([next_id])!r}"
         )
 
+        if len(generated_ids) >= 3:
+            if ((generated_ids)[-1] == generated_ids[-2]
+                                   == generated_ids[-3]):
+                print("Loop detected, stopping.")
+                break
+
         if param_type == "string":
             value_prefix = model.decode(generated_ids)
             try:
@@ -183,8 +189,7 @@ def generate_function_name(
 
         valid = []
         for token_id, token_str in vocab.items():
-            clean = token_str.replace("Ġ", " ")
-            new_prefix = name_prefix + clean
+            new_prefix = name_prefix + token_str
             if any(fn.startswith(new_prefix) for fn in function_names):
                 valid.append(token_id)
 
@@ -282,26 +287,14 @@ def generate_function_call(
         param_type: str = param_info["type"]
 
         prompt_param = (
-            f"Function: {name}\n"
-            f"User request: {user_request}\n"
+            f"Function: {name} ({fn_def['description']})\n"
+            f"    User request: {user_request}\n"
         )
 
         for prev_name, prev_value in parameters.items():
             prompt_param += (
-                f"Parameter '{prev_name}' = {prev_value}\n"
+                f"    The value for parameter '{prev_name}' is {prev_value}.\n"
             )
-
-        param_description = param_info.get(
-            "description",
-            f"Value for parameter {param_name}"
-        )
-
-        prompt_param += (
-            f"Parameter description: {param_description}\n"
-            f"Generate only the value for '{param_name}'.\n"
-            "Do not generate Python code or explanations.\n"
-            "Return a valid JSON value."
-        )
 
         prompt_param += (
             f"    Generate the value for parameter "
