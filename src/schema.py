@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 20:13:09 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/22 20:37:13 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -22,7 +22,9 @@ from typing import Any
 
 
 def is_valid_number_prefix(s: str) -> bool:
+
     """Return True if s could be a prefix of a valid JSON number."""
+
     if not s:
         return True
 
@@ -40,6 +42,7 @@ def is_valid_number_prefix(s: str) -> bool:
 
 
 def is_valid_string_prefix(s: str) -> bool:
+
     """Return True if s could be a prefix of a valid JSON string."""
 
     if not s:
@@ -88,6 +91,7 @@ def generate_parameter_value(
     param_type: str,
     max_tokens: int = 20
 ) -> str:
+
     """Generate a parameter value using the LLM, constrained to the right type.
 
     Args:
@@ -171,6 +175,7 @@ def generate_function_name(
     function_names: list[str],
     max_tokens: int = 20
 ) -> str:
+
     """Generate a function name using the LLM, constrained to valid names.
 
     At each step, only tokens that could continue a valid function name are
@@ -220,7 +225,8 @@ def generate_function_name(
     return model.decode(generated_ids)
 
 
-def load_functions(path: str) -> dict[str, dict]:
+def load_functions(path: str) -> dict[str, dict[str, Any]]:
+
     """Load function definitions from a JSON file.
 
     Args:
@@ -238,7 +244,7 @@ def load_functions(path: str) -> dict[str, dict]:
         print(f"Error loading functions: {err}")
         return {}
 
-    functions_dict: dict[str, dict] = {}
+    functions_dict: dict[str, dict[str, Any]] = {}
     for func in data:
         try:
             validated = FunctionDef(**func)
@@ -266,10 +272,11 @@ def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
 def generate_function_call(
     model: Small_LLM_Model,
     vocab: dict[int, str],
-    functions: dict[str, dict],
+    functions: dict[str, dict[str, Any]],
     user_request: str,
     max_tokens: int = 20
-) -> dict:
+) -> dict[str, Any]:
+
     """Generate a complete function call using constrained decoding.
 
     1. Select function name (constrained to valid names).

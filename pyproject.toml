@@ -24,3 +24,12 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+[dependency-groups]
+dev = [
+    "flake8>=7.5.0",
+    "mypy>=2.4.1",
+]
+
+[tool.mypy]
+exclude = ["llm_sdk/"]
