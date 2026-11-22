@@ -7,12 +7,13 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 19:21:34 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/22 20:13:09 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 
 import json
+from .models import FunctionDef
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
 from .vocab import load_vocab
@@ -230,15 +231,22 @@ def load_functions(path: str) -> dict[str, dict]:
         Each function_def has: name, description, parameters, returns.
     """
 
-    with open(path, "r", encoding="utf-8") as file:
-        try:
+    try:
+        with open(path, "r", encoding="utf-8") as file:
             data = json.load(file)
-        except JSONDecodeError as err:
-            print(f"Error :{err}")
-            return {}
-    functions_dict = {func["name"]: func for func in data}
+    except (JSONDecodeError, FileNotFoundError) as err:
+        print(f"Error loading functions: {err}")
+        return {}
 
+    functions_dict: dict[str, dict] = {}
+    for func in data:
+        try:
+            validated = FunctionDef(**func)
+            functions_dict[validated.name] = validated.model_dump()
+        except Exception as err:
+            print(f"Invalid function definition: {err}")
     return functions_dict
+
 
 
 def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
