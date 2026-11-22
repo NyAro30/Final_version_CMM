@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 19:14:29 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/22 19:21:34 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -140,11 +140,17 @@ def generate_parameter_value(
             f"decoded={model.decode([next_id])!r}"
         )
 
-        if len(generated_ids) >= 3:
-            if ((generated_ids)[-1] == generated_ids[-2]
-                                   == generated_ids[-3]):
-                print("Loop detected, stopping.")
-                break
+        if len(generated_ids) >= 6:
+            for pattern_len in [2, 3, 4]:
+                if len(generated_ids) >= pattern_len * 2:
+                    last = generated_ids[-pattern_len:]
+                    prev = generated_ids[-pattern_len * 2: -pattern_len]
+                    if last == prev:
+                        print(f"Loop detected (pattern {pattern_len}, stopping.)")
+                        break
+            else:
+                continue
+            break
 
         if param_type == "string":
             value_prefix = model.decode(generated_ids)
