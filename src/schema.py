@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/24 21:20:06 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/25 00:57:01 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -20,22 +20,30 @@ from typing import Any
 
 
 def is_valid_number_prefix(s: str) -> bool:
-
+    
     """Return True if s could be a prefix of a valid JSON number."""
-
+    
     if not s:
         return True
-
+    
     if not all(c in "0123456789.+-eE" for c in s):
         return False
-
+    
     if s[0] not in "0123456789-":
         return False
+    
+    if s in ("+", "-", "e", "E", "+e", "-e", "."):
+        return True
 
+    if '-' in s[1:] and 'e' not in s[:s.index('-', 1)].lower():
+        return False
+    
     if s.count('-') > 1 or s.count('.') > 1:
         return False
+    
     if s.lower().count('e') > 1:
         return False
+    
     return True
 
 
@@ -45,6 +53,7 @@ def is_valid_string_prefix(s: str) -> bool:
 
     if not s:
         return True
+
     if not s.startswith('"'):
         return False
 
@@ -55,27 +64,37 @@ def is_valid_string_prefix(s: str) -> bool:
         c = s[i]
 
         if in_escape:
+
             if c not in '"\\/bfnrtu':
                 return False
+
             if c == 'u':
                 hex_part = s[i + 1:i + 5]
+
                 if len(hex_part) < 4:
                     return True
+
                 if not all(h in '0123456789abcdefABCDEF' for h in hex_part):
                     return False
                 i += 5
+
             else:
                 i += 1
             in_escape = False
+
         elif c == '\\':
             in_escape = True
             i += 1
+
         elif c == '"':
+
             if i + 1 < len(s):
                 return False
+
             return True
         elif ord(c) < 32:
             return False
+
         else:
             i += 1
 
@@ -298,6 +317,10 @@ def generate_function_call(
 
     name = generate_function_name(model, vocab, prompt_fn, function_names)
 
+    if name not in functions:
+        print(f"Error: invalid function name '{name}'")
+        return {"name": "", "parameters": {}}
+
     fn_def = functions[name]
     params: dict[str, Any] = fn_def.get("parameters", {})
 
@@ -328,6 +351,10 @@ def generate_function_call(
             value: Any = json.loads(value_str)
         except json.JSONDecodeError:
             print(f"Warning: could not parse value {value_str!r}")
-            value = value_str
+
+            if param_type == "number":
+                value = 0
+            else:
+                value = value_str
         parameters[param_name] = value
     return {"name": name, "parameters": parameters}

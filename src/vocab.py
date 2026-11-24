@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:48:49 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/21 00:41:00 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/25 00:58:05 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -16,6 +16,7 @@ from llm_sdk.llm_sdk import Small_LLM_Model
 
 
 def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
+
     """Load vocab with DECODED strings (handles special chars correctly).
 
     Uses model.decode() for each token to get the actual string,

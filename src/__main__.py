@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:45:29 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 20:21:33 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/25 00:54:46 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -49,11 +49,24 @@ def main() -> None:
 
     functions = load_functions(args.functions_definition)
 
-    model = Small_LLM_Model(device="cpu")
-    vocab = load_vocab(model)
+    if not functions:
+        print("Error: no functions loaded")
+        return
 
-    with open(args.input, "r", encoding="utf-8") as f:
-        raw_prompts = json.load(f)
+
+    try:
+        model = Small_LLM_Model(device="cpu")
+        vocab = load_vocab(model)
+    except Exception as err:
+        print(f"Error loading model: {err}")
+        return
+
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            raw_prompts = json.load(f)
+    except (FileExistsError, json.JSONDecodeError) as err:
+        print(f"Error reading input: {err}")
+        return
 
     prompts = []
 
