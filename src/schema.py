@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 20:37:13 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/24 21:20:06 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -16,8 +16,6 @@ import json
 from .models import FunctionDef
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
-from .vocab import load_vocab
-from .validator import is_valid_json
 from typing import Any
 
 
@@ -151,7 +149,8 @@ def generate_parameter_value(
                     last = generated_ids[-pattern_len:]
                     prev = generated_ids[-pattern_len * 2: -pattern_len]
                     if last == prev:
-                        print(f"Loop detected (pattern {pattern_len}, stopping.)")
+                        print(f"Loop detected (pattern {pattern_len},"
+                              f" stopping.)")
                         break
             else:
                 continue
@@ -254,7 +253,6 @@ def load_functions(path: str) -> dict[str, dict[str, Any]]:
     return functions_dict
 
 
-
 def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
     vocab_path = model.get_path_to_vocab_file()
     with open(vocab_path, "r", encoding="utf-8") as f:
@@ -325,7 +323,7 @@ def generate_function_call(
         value_str = generate_parameter_value(
             model, vocab, prompt_param, param_type
         )
-        
+
         try:
             value: Any = json.loads(value_str)
         except json.JSONDecodeError:

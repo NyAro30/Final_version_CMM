@@ -7,17 +7,18 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/22 20:05:17 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 20:39:33 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/24 21:17:45 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 from typing import Any
 from pydantic import BaseModel, Field
 
+
 class ParameterDef(BaseModel):
-    
+
     """Definition of a single function parameter."""
-    
+
     type: str = Field(description="Parameter type: number, string, or boolean")
 
 
