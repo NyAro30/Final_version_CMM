@@ -6,349 +6,285 @@
 #                                                      +:+ +:+         +:+    #
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
-#   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/26 09:48:43 by mny-aro-           ###   ########.fr      #
+#   Created: 2026/11/26 13:10:41 by mny-aro-            #+#    #+#            #
+#   Updated: 2026/11/26 14:00:05 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
+"""Function selection, argument extraction, and constrained JSON values."""
+
+from __future__ import annotations
 
 import json
-from .models import FunctionDef
-from json import JSONDecodeError
-from llm_sdk.llm_sdk import Small_LLM_Model
-from typing import Any
+import math
 import os
+import re
+from json import JSONDecodeError
+from typing import Any
+
+from pydantic import ValidationError
+
+from .models import FunctionDef, LLMModel
+from .prompts import argument_prompt, chat_prompt
+from .validator import is_valid_json
 
 VERBOSE = os.environ.get("VERBOSE", "") == "1"
+NUMBER_PREFIX = re.compile(
+    r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]*)?(?:[eE][+-]?[0-9]*)?"
+)
 
 
-def is_valid_number_prefix(s: str) -> bool:
+def is_valid_number_prefix(value: str) -> bool:
+    """Return whether value is an incomplete or complete JSON number prefix."""
+    return bool(NUMBER_PREFIX.fullmatch(value)) or value in ("", "-")
 
-    """Return True if s could be a prefix of a valid JSON number."""
 
-    if not s:
+def is_valid_string_prefix(value: str) -> bool:
+    """Return whether value is an incomplete or complete JSON string."""
+    if not value:
         return True
-
-    if not all(c in "0123456789.+-eE" for c in s):
+    if value[0] != '"':
         return False
-
-    if s[0] not in "0123456789-":
-        return False
-
-    if s in ("+", "-", "e", "E", "+e", "-e", "."):
-        return True
-
-    if '-' in s[1:] and 'e' not in s[:s.index('-', 1)].lower():
-        return False
-
-    if s.count('-') > 1 or s.count('.') > 1:
-        return False
-
-    if s.lower().count('e') > 1:
-        return False
-
-    return True
-
-
-def is_valid_string_prefix(s: str) -> bool:
-
-    """Return True if s could be a prefix of a valid JSON string."""
-
-    if not s:
-        return True
-
-    if not s.startswith('"'):
-        return False
-
-    i = 1
-    in_escape = False
-
-    while i < len(s):
-        c = s[i]
-
-        if in_escape:
-
-            if c not in '"\\/bfnrtu':
+    escaped = False
+    unicode_digits = 0
+    for char in value[1:]:
+        if unicode_digits:
+            if char not in "0123456789abcdefABCDEF":
                 return False
-
-            if c == 'u':
-                hex_part = s[i + 1:i + 5]
-
-                if len(hex_part) < 4:
-                    return True
-
-                if not all(h in '0123456789abcdefABCDEF' for h in hex_part):
-                    return False
-                i += 5
-
-            else:
-                i += 1
-            in_escape = False
-
-        elif c == '\\':
-            in_escape = True
-            i += 1
-
-        elif c == '"':
-
-            if i + 1 < len(s):
+            unicode_digits -= 1
+        elif escaped:
+            if char not in '"\\/bfnrtu':
                 return False
-
-            return True
-        elif ord(c) < 32:
+            if char == "u":
+                unicode_digits = 4
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == '"':
+            return value.endswith('"') and char == value[-1]
+        elif ord(char) < 32:
             return False
-
-        else:
-            i += 1
-
     return True
+
+
+def is_valid_boolean_prefix(value: str) -> bool:
+    """Return whether value can still become a JSON boolean."""
+    return any(literal.startswith(value) for literal in ("true", "false"))
+
+
+def _ranked_tokens(logits: list[float], vocab: dict[int, str]) -> list[int]:
+    """Return valid vocabulary IDs from the highest logit to the lowest."""
+    ids = [token for token in vocab if 0 <= token < len(logits)]
+    return sorted(ids, key=logits.__getitem__, reverse=True)
 
 
 def generate_parameter_value(
-    model: Small_LLM_Model,
+    model: LLMModel,
     vocab: dict[int, str],
     prompt: str,
     param_type: str,
-    max_tokens: int = 20
+    max_tokens: int = 128,
 ) -> str:
+    """Generate one JSON scalar while masking tokens that violate its type."""
+    validators = {
+        "number": is_valid_number_prefix,
+        "string": is_valid_string_prefix,
+        "boolean": is_valid_boolean_prefix,
+    }
+    if param_type not in validators:
+        raise ValueError(f"Unsupported parameter type: {param_type!r}")
 
-    """Generate a parameter value using the LLM, constrained to the right type.
+    ids = model.encode(chat_prompt(
+        "Return only one JSON scalar of the required type.",
+        prompt,
+    )).tolist()[0]
+    generated: list[int] = []
 
-    Args:
-        model: The LLM model instance.
-        vocab: Dict {token_id: token_string}.
-        prompt: Instruction prompt for the model.
-        param_type: "number" or "string".
-        max_tokens: Max tokens to generate.
-
-    Returns:
-        The generated value as a string.
-    """
-    ids = model.encode(prompt).tolist()[0]
-    generated_ids: list[int] = []
-
-    for i in range(max_tokens):
+    for step in range(max_tokens):
         logits = model.get_logits_from_input_ids(ids)
-        value_prefix = model.decode(generated_ids)
-
-        valid: list[int] = []
-        for token_id, token_str in vocab.items():
-            new_prefix = value_prefix + token_str
-
+        prefix = model.decode(generated)
+        ranked = _ranked_tokens(logits, vocab)
+        if param_type == "number" and generated and ranked:
+            try:
+                complete_number = json.loads(prefix)
+            except JSONDecodeError:
+                complete_number = None
+            if (
+                isinstance(complete_number, (int, float))
+                and not isinstance(complete_number, bool)
+            ):
+                next_prefix = model.decode(generated + [ranked[0]])
+                if (
+                    next_prefix == prefix
+                    or not is_valid_number_prefix(next_prefix)
+                ):
+                    break
+        token = next((
+            token for token in ranked
+            if (
+                (candidate := model.decode(generated + [token])) != prefix
+                and validators[param_type](candidate)
+            )
+        ), None)
+        if token is None:
             if param_type == "number":
-                if is_valid_number_prefix(new_prefix):
-                    valid.append(token_id)
-            elif param_type == "string":
-                if is_valid_string_prefix(new_prefix):
-                    valid.append(token_id)
+                try:
+                    value = json.loads(prefix)
+                except JSONDecodeError:
+                    value = None
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                ):
+                    break
+            raise ValueError(f"No valid token for {param_type} value")
 
-        if not valid:
-            break
-
-        valid_set = set(valid)
-
-        if param_type == "number" and generated_ids:
-            unconstrained_argmax = logits.index(max(logits))
-            if unconstrained_argmax not in valid_set:
-                break
-
-        masked = [
-            logits[j] if j in valid_set else float('-inf')
-            for j in range(len(logits))
-        ]
-        next_id = masked.index(max(masked))
-
-        ids.append(next_id)
-        generated_ids.append(next_id)
+        generated.append(token)
+        ids.append(token)
+        prefix = model.decode(generated)
 
         if VERBOSE:
-            print(
-                f"Step {i + 1}: token_id={next_id},"
-                f"decoded={model.decode([next_id])!r}"
-            )
-
-        if len(generated_ids) >= 6:
-            for pattern_len in [2, 3, 4]:
-                if len(generated_ids) >= pattern_len * 2:
-                    last = generated_ids[-pattern_len:]
-                    prev = generated_ids[-pattern_len * 2: -pattern_len]
-                    if last == prev:
-                        if VERBOSE:
-                            print(f"Loop detected (pattern {pattern_len},"
-                                  f" stopping.)")
-                        break
-            else:
-                continue
-            break
-
+            print(f"Step {step + 1}: {model.decode([token])!r}")
         if param_type == "string":
-            value_prefix = model.decode(generated_ids)
             try:
-                json.loads(value_prefix)
-                break
-            except json.JSONDecodeError:
+                if isinstance(json.loads(prefix), str):
+                    break
+            except JSONDecodeError:
                 pass
+        elif param_type == "boolean" and prefix in ("true", "false"):
+            break
+        elif param_type == "number":
+            try:
+                json.loads(prefix)
+            except JSONDecodeError:
+                continue
+            greedy = _ranked_tokens(logits, vocab)
+            if not greedy or not validators[param_type](
+                model.decode(generated + [greedy[0]])
+            ):
+                break
 
-    return model.decode(generated_ids)
+    result = model.decode(generated)
+    if not is_valid_json(result):
+        raise ValueError(f"Generated invalid JSON value: {result!r}")
+    try:
+        value = json.loads(result)
+    except JSONDecodeError as err:
+        raise ValueError(f"Generated invalid JSON value: {result!r}") from err
+    expected_type = {
+        "number": (int, float),
+        "string": (str,),
+        "boolean": (bool,),
+    }[param_type]
+    if isinstance(value, bool) and param_type == "number":
+        raise ValueError("Generated boolean where a number was required")
+    if not isinstance(value, expected_type):
+        raise ValueError(f"Generated value does not match {param_type}")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Generated a non-finite number")
+    return result
 
 
 def generate_function_name(
-    model: Small_LLM_Model,
+    model: LLMModel,
     vocab: dict[int, str],
     prompt: str,
     function_names: list[str],
-    max_tokens: int = 20
+    max_tokens: int = 20,
 ) -> str:
-
-    """Generate a function name using the LLM, constrained to valid names.
-
-    At each step, only tokens that could continue a valid function name are
-    allowed.
-
-    Args:
-        model: The LLM model instance.
-        vocab: Dict {token_id: token_string}.
-        prompt: Instruction prompt for the model.
-        function_names: List of valid function names.
-        max_tokens: Max tokens to generate.
-
-    Returns:
-        The generated function name (must be one of function_names).
-    """
-
+    """Use model logits to select a valid function name token by token."""
     ids = model.encode(prompt).tolist()[0]
-    generated_ids: list[int] = []
-
-    for i in range(max_tokens):
+    generated: list[int] = []
+    for step in range(max_tokens):
         logits = model.get_logits_from_input_ids(ids)
-        name_prefix = model.decode(generated_ids)
-
-        valid: list[int] = []
-        for token_id, token_str in vocab.items():
-            new_prefix = name_prefix + token_str
-            if any(fn.startswith(new_prefix) for fn in function_names):
-                valid.append(token_id)
-
-        if not valid:
+        prefix = model.decode(generated)
+        token = next((
+            token for token in _ranked_tokens(logits, vocab)
+            if (candidate := model.decode(generated + [token])) != prefix
+            and any(name.startswith(candidate) for name in function_names)
+        ), None)
+        if token is None:
             break
-
-        valid_set = set(valid)
-        masked = [logits[j] if j in valid_set else float('-inf')
-                  for j in range(len(logits))]
-        next_id = masked.index(max(masked))
-
-        ids.append(next_id)
-        generated_ids.append(next_id)
-
+        generated.append(token)
+        ids.append(token)
+        name = model.decode(generated)
         if VERBOSE:
-            print(f"Step {i+1}: token_id={next_id},"
-                  f"decoded={model.decode([next_id])!r}")
-
-        name_prefix = model.decode(generated_ids)
-        if name_prefix in function_names:
-            break
-
-    return model.decode(generated_ids)
+            print(f"Name step {step + 1}: {name!r}")
+        if name in function_names:
+            return name
+    return model.decode(generated)
 
 
 def load_functions(path: str) -> dict[str, dict[str, Any]]:
-
-    """Load function definitions from a JSON file.
-
-    Args:
-        path: Path to functions_definition.json.
-
-    Returns:
-        Dict {function_name: function_definition}.
-        Each function_def has: name, description, parameters, returns.
-    """
-
+    """Load and validate function definitions from a JSON array."""
     try:
-        with open(path, "r", encoding="utf-8") as file:
+        with open(path, encoding="utf-8") as file:
             data = json.load(file)
-    except (JSONDecodeError, FileNotFoundError) as err:
+        if not isinstance(data, list):
+            raise ValueError("function definitions must be a JSON array")
+    except (OSError, JSONDecodeError, ValueError) as err:
         print(f"Error loading functions: {err}")
         return {}
 
-    functions_dict: dict[str, dict[str, Any]] = {}
-    for func in data:
+    functions: dict[str, dict[str, Any]] = {}
+    for item in data:
         try:
-            validated = FunctionDef(**func)
-            functions_dict[validated.name] = validated.model_dump()
-        except Exception as err:
-            print(f"Invalid function definition: {err}")
-    return functions_dict
+            definition = FunctionDef.model_validate(item)
+            if definition.name in functions:
+                raise ValueError(f"duplicate function name: {definition.name}")
+            functions[definition.name] = definition.model_dump()
+        except (ValidationError, ValueError) as err:
+            print(f"Skipping invalid function definition: {err}")
+    return functions
 
 
 def generate_function_call(
-    model: Small_LLM_Model,
+    model: LLMModel,
     vocab: dict[int, str],
     functions: dict[str, dict[str, Any]],
     user_request: str,
-    max_tokens: int = 20
 ) -> dict[str, Any]:
+    """Select a function with the LLM and build validated typed arguments."""
+    if not functions:
+        raise ValueError("No function definitions were provided")
 
-    """Generate a complete function call using constrained decoding.
-
-    1. Select function name (constrained to valid names).
-    2. For each parameter, generate value (constrained to type).
-    3. Assemble into {"name": ..., "parameters": {...}}.
-
-    Returns:
-        Dict with "name" and "parameters" keys.
-    """
-
-    function_names = list(functions.keys())
-
-    prompt_fn = ""
-    for fn_name, fn_def in functions.items():
-        desc: str = fn_def["description"]
-        prompt_fn += f"- {fn_name}: {desc}\n"
-    prompt_fn += (
-        f"\nUser request: {user_request}\n\n"
-        "Select the most appropriate function name:"
+    choices = "\n".join(
+        f"- {name}: {definition['description']}"
+        for name, definition in functions.items()
     )
-
-    name = generate_function_name(model, vocab, prompt_fn, function_names)
-
+    prompt = chat_prompt(
+        "Choose the best matching function. Return only its exact name.",
+        f"Available functions:\n{choices}\nRequest: {user_request}",
+    )
+    name = generate_function_name(model, vocab, prompt, list(functions))
     if name not in functions:
-        print(f"Error: invalid function name '{name}'")
-        return {"name": "", "parameters": {}}
+        raise ValueError(f"Model selected invalid function name: {name!r}")
 
-    fn_def = functions[name]
-    params: dict[str, Any] = fn_def.get("parameters", {})
-
+    definition = functions[name]
     parameters: dict[str, Any] = {}
-    for param_name, param_info in params.items():
-        param_type: str = param_info["type"]
-
-        prompt_param = (
-            f"Function: {name} ({fn_def['description']})\n"
-            f"    User request: {user_request}\n"
+    parameter_names = list(definition.get("parameters", {}))
+    for param_name, param_info in definition.get("parameters", {}).items():
+        param_type = param_info["type"]
+        value_prompt = argument_prompt(
+            name,
+            definition["description"],
+            user_request,
+            param_name,
+            param_type,
+            parameter_names,
         )
-
-        for prev_name, prev_value in parameters.items():
-            prompt_param += (
-                f"    The value for parameter '{prev_name}' is {prev_value}.\n"
-            )
-
-        prompt_param += (
-            f"    Generate the value for parameter "
-            f"'{param_name}' (a {param_type}):"
+        value = json.loads(
+            generate_parameter_value(model, vocab, value_prompt, param_type)
         )
-
-        value_str = generate_parameter_value(
-            model, vocab, prompt_param, param_type
-        )
-
-        try:
-            value: Any = json.loads(value_str)
-        except json.JSONDecodeError:
-            print(f"Warning: could not parse value {value_str!r}")
-
-            if param_type == "number":
-                value = 0
-            else:
-                value = value_str
+        if param_type == "number" and (
+            isinstance(value, bool) or not isinstance(value, (int, float))
+        ):
+            raise ValueError(f"Invalid number argument {param_name!r}")
+        if param_type == "number":
+            value = float(value)
+        if param_type == "string" and not isinstance(value, str):
+            raise ValueError(f"Invalid string argument {param_name!r}")
+        if param_type == "boolean" and not isinstance(value, bool):
+            raise ValueError(f"Invalid boolean argument {param_name!r}")
         parameters[param_name] = value
     return {"name": name, "parameters": parameters}

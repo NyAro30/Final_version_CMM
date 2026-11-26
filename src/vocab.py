@@ -11,15 +11,17 @@
 #                                                                             #
 # ########################################################################### #
 
+from __future__ import annotations
+
 import json
 import os
-from llm_sdk.llm_sdk import Small_LLM_Model
 
+from .models import VocabularyModel
 
 VERBOSE = os.environ.get("VERBOSE", "") == "1"
 
 
-def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
+def load_vocab(model: VocabularyModel) -> dict[int, str]:
 
     """Load vocab with DECODED strings (handles special chars correctly).
 

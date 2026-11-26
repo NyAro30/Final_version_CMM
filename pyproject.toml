@@ -16,7 +16,6 @@ dependencies = [
     "transformers>=5.22.2",
 ]
 
-
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
