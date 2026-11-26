@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/26 13:10:41 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/26 14:00:05 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/26 16:24:54 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -18,58 +18,22 @@ from __future__ import annotations
 import json
 import math
 import os
-import re
 from json import JSONDecodeError
 from typing import Any
 
 from pydantic import ValidationError
 
 from .models import FunctionDef, LLMModel
-from .prompts import argument_prompt, chat_prompt
+from .json_prefix import (
+    is_valid_boolean_prefix,
+    is_valid_number_prefix,
+    is_valid_string_prefix,
+    scalar_before_separator,
+)
+from .prompts import arguments_prompt, chat_prompt
 from .validator import is_valid_json
 
 VERBOSE = os.environ.get("VERBOSE", "") == "1"
-NUMBER_PREFIX = re.compile(
-    r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]*)?(?:[eE][+-]?[0-9]*)?"
-)
-
-
-def is_valid_number_prefix(value: str) -> bool:
-    """Return whether value is an incomplete or complete JSON number prefix."""
-    return bool(NUMBER_PREFIX.fullmatch(value)) or value in ("", "-")
-
-
-def is_valid_string_prefix(value: str) -> bool:
-    """Return whether value is an incomplete or complete JSON string."""
-    if not value:
-        return True
-    if value[0] != '"':
-        return False
-    escaped = False
-    unicode_digits = 0
-    for char in value[1:]:
-        if unicode_digits:
-            if char not in "0123456789abcdefABCDEF":
-                return False
-            unicode_digits -= 1
-        elif escaped:
-            if char not in '"\\/bfnrtu':
-                return False
-            if char == "u":
-                unicode_digits = 4
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == '"':
-            return value.endswith('"') and char == value[-1]
-        elif ord(char) < 32:
-            return False
-    return True
-
-
-def is_valid_boolean_prefix(value: str) -> bool:
-    """Return whether value can still become a JSON boolean."""
-    return any(literal.startswith(value) for literal in ("true", "false"))
 
 
 def _ranked_tokens(logits: list[float], vocab: dict[int, str]) -> list[int]:
@@ -84,8 +48,11 @@ def generate_parameter_value(
     prompt: str,
     param_type: str,
     max_tokens: int = 128,
+    assistant_prefix: str = "",
 ) -> str:
+
     """Generate one JSON scalar while masking tokens that violate its type."""
+
     validators = {
         "number": is_valid_number_prefix,
         "string": is_valid_string_prefix,
@@ -94,10 +61,12 @@ def generate_parameter_value(
     if param_type not in validators:
         raise ValueError(f"Unsupported parameter type: {param_type!r}")
 
-    ids = model.encode(chat_prompt(
-        "Return only one JSON scalar of the required type.",
-        prompt,
-    )).tolist()[0]
+    ids = model.encode(
+        chat_prompt(
+            "Fill the function arguments from the request.",
+            prompt,
+        ) + assistant_prefix
+    ).tolist()[0]
     generated: list[int] = []
 
     for step in range(max_tokens):
@@ -123,7 +92,11 @@ def generate_parameter_value(
             token for token in ranked
             if (
                 (candidate := model.decode(generated + [token])) != prefix
-                and validators[param_type](candidate)
+                and (
+                    validators[param_type](candidate)
+                    or scalar_before_separator(candidate, param_type)
+                    is not None
+                )
             )
         ), None)
         if token is None:
@@ -145,6 +118,8 @@ def generate_parameter_value(
 
         if VERBOSE:
             print(f"Step {step + 1}: {model.decode([token])!r}")
+        if scalar_before_separator(prefix, param_type) is not None:
+            break
         if param_type == "string":
             try:
                 if isinstance(json.loads(prefix), str):
@@ -164,7 +139,11 @@ def generate_parameter_value(
             ):
                 break
 
-    result = model.decode(generated)
+    generated_text = model.decode(generated)
+    result = (
+        scalar_before_separator(generated_text, param_type)
+        or generated_text
+    )
     if not is_valid_json(result):
         raise ValueError(f"Generated invalid JSON value: {result!r}")
     try:
@@ -192,7 +171,9 @@ def generate_function_name(
     function_names: list[str],
     max_tokens: int = 20,
 ) -> str:
+
     """Use model logits to select a valid function name token by token."""
+
     ids = model.encode(prompt).tolist()[0]
     generated: list[int] = []
     for step in range(max_tokens):
@@ -216,7 +197,9 @@ def generate_function_name(
 
 
 def load_functions(path: str) -> dict[str, dict[str, Any]]:
+
     """Load and validate function definitions from a JSON array."""
+
     try:
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
@@ -244,7 +227,9 @@ def generate_function_call(
     functions: dict[str, dict[str, Any]],
     user_request: str,
 ) -> dict[str, Any]:
+
     """Select a function with the LLM and build validated typed arguments."""
+
     if not functions:
         raise ValueError("No function definitions were provided")
 
@@ -262,19 +247,32 @@ def generate_function_call(
 
     definition = functions[name]
     parameters: dict[str, Any] = {}
-    parameter_names = list(definition.get("parameters", {}))
+    parameter_types = {
+        parameter_name: parameter_info["type"]
+        for parameter_name, parameter_info in definition.get(
+            "parameters", {}
+        ).items()
+    }
+    value_prompt = arguments_prompt(
+        name,
+        definition["description"],
+        user_request,
+        parameter_types,
+    )
+    object_prefix = "{"
     for param_name, param_info in definition.get("parameters", {}).items():
         param_type = param_info["type"]
-        value_prompt = argument_prompt(
-            name,
-            definition["description"],
-            user_request,
-            param_name,
-            param_type,
-            parameter_names,
-        )
+        if parameters:
+            object_prefix += ", "
+        object_prefix += f"{json.dumps(param_name)}: "
         value = json.loads(
-            generate_parameter_value(model, vocab, value_prompt, param_type)
+            generate_parameter_value(
+                model,
+                vocab,
+                value_prompt,
+                param_type,
+                assistant_prefix=object_prefix,
+            )
         )
         if param_type == "number" and (
             isinstance(value, bool) or not isinstance(value, (int, float))
@@ -287,4 +285,5 @@ def generate_function_call(
         if param_type == "boolean" and not isinstance(value, bool):
             raise ValueError(f"Invalid boolean argument {param_name!r}")
         parameters[param_name] = value
+        object_prefix += json.dumps(value, ensure_ascii=False)
     return {"name": name, "parameters": parameters}

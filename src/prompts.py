@@ -1,3 +1,16 @@
+#!/usr/bin/env python3
+# ########################################################################### #
+#   shebang: 1                                                                #
+#                                                          :::      ::::::::  #
+#   prompts.py                                           :+:      :+:    :+:  #
+#                                                      +:+ +:+         +:+    #
+#   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
+#                                                  +#+#+#+#+#+   +#+          #
+#   Created: 2026/11/26 16:22:30 by mny-aro-            #+#    #+#            #
+#   Updated: 2026/11/26 16:22:32 by mny-aro-           ###   ########.fr      #
+#                                                                             #
+# ########################################################################### #
+
 """Prompt construction for function and argument selection."""
 
 
@@ -10,70 +23,73 @@ def chat_prompt(instruction: str, request: str) -> str:
     )
 
 
-def argument_prompt(
+def arguments_prompt(
     function_name: str,
     description: str,
     user_request: str,
-    parameter_name: str,
-    parameter_type: str,
-    parameter_names: list[str],
+    parameters: dict[str, str],
 ) -> str:
-    """Describe the role and expected value of one function argument."""
-    position = parameter_names.index(parameter_name) + 1
+
+    """Describe a function's complete input object and argument roles."""
+
+    parameter_names = list(parameters)
     prompt = (
-        f"Function: {function_name}\n"
-        f"Function purpose: {description}\n"
-        f"Arguments in definition order: {parameter_names}\n"
-        f"Argument to extract: {parameter_name} "
-        f"(position {position} of {len(parameter_names)})\n"
-        f"Argument type: {parameter_type}\n"
-        f"User request: {user_request}\n"
-        "Infer the value from the request and the argument's role in "
-        "the function. For neutral argument names, use the order in "
-        "which the values appear in the request and the definition. "
-        "Do not compute the function's result, paraphrase, normalize, or "
-        "invent input values. "
-        "Return one JSON value with exactly the requested type, "
-        "without comments."
+        f"Function {function_name}: {description}\n"
+        "Arguments in order: "
+        + ", ".join(
+            f"{name} ({parameter_type})"
+            for name, parameter_type in parameters.items()
+        )
+        + "\n"
+        f"Request: {user_request}\n"
+        "Return exactly these arguments as a JSON object, not the "
+        "transformed result. Every value is a function input. For neutral "
+        "argument names, map request values to arguments in order. Do not "
+        "invent, normalize, or transform inputs."
     )
-    lower_name = parameter_name.lower()
-    if "regex" in lower_name or "pattern" in lower_name:
+    roles: list[str] = []
+    for name in parameter_names:
+        lower_name = name.lower()
+        if "regex" in lower_name or "pattern" in lower_name:
+            roles.append(
+                f"{name} is a Python regex matching the feature requested; "
+                "write it without slash delimiters. It is a reusable "
+                "pattern, not the actual matched text or feature name. "
+                "When the feature is one character from a set, match every "
+                "member of that set."
+            )
+        elif "replacement" in lower_name:
+            roles.append(
+                f"{name} is the literal inserted at each match; use the "
+                "replacement specified by the request, not the match. "
+                "When a symbol is named, return its glyph once rather than "
+                "its English name. A symbol is one literal character."
+            )
+        elif "source" in lower_name:
+            roles.append(
+                f"{name} is the exact original text; copy it unchanged."
+            )
+        elif "name" in lower_name:
+            roles.append(
+                f"{name} is the person or entity named by the request; "
+                "preserve its spelling and capitalization."
+            )
+    if roles:
+        prompt += " Argument roles: " + " ".join(roles)
+    if len(parameter_names) > 1:
         prompt += (
-            " This argument is the pattern used to match text in the "
-            "source string. Use Python regular-expression syntax without "
-            "slash delimiters. Example: extracting the first word from "
-            "a sentence can use the pattern \"[A-Za-z]+\". For matching "
-            "words that begin with a capital letter, use a pattern such as "
-            "\"\\b[A-Z][a-z]*\\b\"."
+            " For neutral names, map request values to arguments in the "
+            "listed order. Do not invent or transform inputs."
         )
-    elif "replacement" in lower_name:
+    if any(param_type == "number" for param_type in parameters.values()):
         prompt += (
-            " This is the exact literal text inserted for each match. "
-            "For a request phrased as 'change X to Y', return only Y, "
-            "not X, the source text, or the matching pattern."
+            " Generic example: for add(left, right) and 'add 7 and 9', "
+            "left is 7 and right is 9. Return input numbers, not results."
         )
-    elif "source" in lower_name:
-        prompt += (
-            " This is the original text to transform, not the transformed "
-            "result. Copy it exactly, preserving capitalization, spaces, "
-            "and punctuation; do not return the pattern or replacement."
-        )
-    elif "name" in lower_name:
-        prompt += (
-            " This is the person or entity the request refers to, not "
-            "the greeting or other generated output."
-        )
-    elif parameter_type == "number":
-        prompt += (
-            " Example: for a function add(left, right) and the request "
-            "'add 7 and 8', left is 7 and right is 8. For a function "
-            "square_root(value) and the request 'find the square root of "
-            "25', value is 25, not the computed result 5."
-        )
-    elif parameter_type == "string":
-        prompt += (
-            " Example: for a function reverse(text) and the request "
-            "'reverse the word \"planet\"', text is \"planet\". When the "
-            "request quotes source text, return that exact text."
-        )
+    if any(param_type == "string" for param_type in parameters.values()):
+        if not roles:
+            prompt += (
+                " Generic example: for reverse(text) and 'reverse moss', "
+                "text is \"moss\"."
+            )
     return prompt

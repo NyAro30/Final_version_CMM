@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:45:29 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/26 14:03:52 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/26 16:23:28 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -122,7 +122,9 @@ def main() -> int:
 
 
 def _write_results(path: str, results: list[dict[str, Any]]) -> int:
+
     """Write all generated results as strict JSON."""
+
     output_path = Path(path)
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
