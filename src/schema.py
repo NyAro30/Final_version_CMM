@@ -7,21 +7,25 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/22 19:21:34 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/26 09:48:43 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
 
 import json
+from .models import FunctionDef
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
-from .vocab import load_vocab
-from .validator import is_valid_json
 from typing import Any
+import os
+
+VERBOSE = os.environ.get("VERBOSE", "") == "1"
 
 
 def is_valid_number_prefix(s: str) -> bool:
+
     """Return True if s could be a prefix of a valid JSON number."""
+
     if not s:
         return True
 
@@ -31,18 +35,28 @@ def is_valid_number_prefix(s: str) -> bool:
     if s[0] not in "0123456789-":
         return False
 
+    if s in ("+", "-", "e", "E", "+e", "-e", "."):
+        return True
+
+    if '-' in s[1:] and 'e' not in s[:s.index('-', 1)].lower():
+        return False
+
     if s.count('-') > 1 or s.count('.') > 1:
         return False
+
     if s.lower().count('e') > 1:
         return False
+
     return True
 
 
 def is_valid_string_prefix(s: str) -> bool:
+
     """Return True if s could be a prefix of a valid JSON string."""
 
     if not s:
         return True
+
     if not s.startswith('"'):
         return False
 
@@ -53,27 +67,37 @@ def is_valid_string_prefix(s: str) -> bool:
         c = s[i]
 
         if in_escape:
+
             if c not in '"\\/bfnrtu':
                 return False
+
             if c == 'u':
                 hex_part = s[i + 1:i + 5]
+
                 if len(hex_part) < 4:
                     return True
+
                 if not all(h in '0123456789abcdefABCDEF' for h in hex_part):
                     return False
                 i += 5
+
             else:
                 i += 1
             in_escape = False
+
         elif c == '\\':
             in_escape = True
             i += 1
+
         elif c == '"':
+
             if i + 1 < len(s):
                 return False
+
             return True
         elif ord(c) < 32:
             return False
+
         else:
             i += 1
 
@@ -87,6 +111,7 @@ def generate_parameter_value(
     param_type: str,
     max_tokens: int = 20
 ) -> str:
+
     """Generate a parameter value using the LLM, constrained to the right type.
 
     Args:
@@ -135,10 +160,12 @@ def generate_parameter_value(
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(
-            f"Step {i + 1}: token_id={next_id},"
-            f"decoded={model.decode([next_id])!r}"
-        )
+
+        if VERBOSE:
+            print(
+                f"Step {i + 1}: token_id={next_id},"
+                f"decoded={model.decode([next_id])!r}"
+            )
 
         if len(generated_ids) >= 6:
             for pattern_len in [2, 3, 4]:
@@ -146,7 +173,9 @@ def generate_parameter_value(
                     last = generated_ids[-pattern_len:]
                     prev = generated_ids[-pattern_len * 2: -pattern_len]
                     if last == prev:
-                        print(f"Loop detected (pattern {pattern_len}, stopping.)")
+                        if VERBOSE:
+                            print(f"Loop detected (pattern {pattern_len},"
+                                  f" stopping.)")
                         break
             else:
                 continue
@@ -170,6 +199,7 @@ def generate_function_name(
     function_names: list[str],
     max_tokens: int = 20
 ) -> str:
+
     """Generate a function name using the LLM, constrained to valid names.
 
     At each step, only tokens that could continue a valid function name are
@@ -193,7 +223,7 @@ def generate_function_name(
         logits = model.get_logits_from_input_ids(ids)
         name_prefix = model.decode(generated_ids)
 
-        valid = []
+        valid: list[int] = []
         for token_id, token_str in vocab.items():
             new_prefix = name_prefix + token_str
             if any(fn.startswith(new_prefix) for fn in function_names):
@@ -209,8 +239,10 @@ def generate_function_name(
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(f"Step {i+1}: token_id={next_id},"
-              f"decoded={model.decode([next_id])!r}")
+
+        if VERBOSE:
+            print(f"Step {i+1}: token_id={next_id},"
+                  f"decoded={model.decode([next_id])!r}")
 
         name_prefix = model.decode(generated_ids)
         if name_prefix in function_names:
@@ -219,7 +251,8 @@ def generate_function_name(
     return model.decode(generated_ids)
 
 
-def load_functions(path: str) -> dict[str, dict]:
+def load_functions(path: str) -> dict[str, dict[str, Any]]:
+
     """Load function definitions from a JSON file.
 
     Args:
@@ -230,38 +263,31 @@ def load_functions(path: str) -> dict[str, dict]:
         Each function_def has: name, description, parameters, returns.
     """
 
-    with open(path, "r", encoding="utf-8") as file:
-        try:
+    try:
+        with open(path, "r", encoding="utf-8") as file:
             data = json.load(file)
-        except JSONDecodeError as err:
-            print(f"Error :{err}")
-            return {}
-    functions_dict = {func["name"]: func for func in data}
+    except (JSONDecodeError, FileNotFoundError) as err:
+        print(f"Error loading functions: {err}")
+        return {}
 
+    functions_dict: dict[str, dict[str, Any]] = {}
+    for func in data:
+        try:
+            validated = FunctionDef(**func)
+            functions_dict[validated.name] = validated.model_dump()
+        except Exception as err:
+            print(f"Invalid function definition: {err}")
     return functions_dict
-
-
-def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
-    vocab_path = model.get_path_to_vocab_file()
-    with open(vocab_path, "r", encoding="utf-8") as f:
-        raw_vocab = json.load(f)
-
-    decoded: dict[int, str] = {}
-    total = len(raw_vocab)
-    for i, (token_str, token_id) in enumerate(raw_vocab.items()):
-        decoded[token_id] = model.decode([token_id])
-        if i % 10000 == 0:
-            print(f"Decoding vocab: {i}/{total}")
-    return decoded
 
 
 def generate_function_call(
     model: Small_LLM_Model,
     vocab: dict[int, str],
-    functions: dict[str, dict],
+    functions: dict[str, dict[str, Any]],
     user_request: str,
     max_tokens: int = 20
-) -> dict:
+) -> dict[str, Any]:
+
     """Generate a complete function call using constrained decoding.
 
     1. Select function name (constrained to valid names).
@@ -284,6 +310,10 @@ def generate_function_call(
     )
 
     name = generate_function_name(model, vocab, prompt_fn, function_names)
+
+    if name not in functions:
+        print(f"Error: invalid function name '{name}'")
+        return {"name": "", "parameters": {}}
 
     fn_def = functions[name]
     params: dict[str, Any] = fn_def.get("parameters", {})
@@ -310,11 +340,15 @@ def generate_function_call(
         value_str = generate_parameter_value(
             model, vocab, prompt_param, param_type
         )
-        
+
         try:
             value: Any = json.loads(value_str)
         except json.JSONDecodeError:
             print(f"Warning: could not parse value {value_str!r}")
-            value = value_str
+
+            if param_type == "number":
+                value = 0
+            else:
+                value = value_str
         parameters[param_name] = value
     return {"name": name, "parameters": parameters}

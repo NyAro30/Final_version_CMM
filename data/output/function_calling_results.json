@@ -33,14 +33,14 @@
     "prompt": "Reverse the string 'hello'",
     "name": "fn_reverse_string",
     "parameters": {
-      "s": "\"'hello' 'hello' 'hello' 'hello' 'hello' 'hello' 'hello"
+      "s": "\"'hello' 'hello' '"
     }
   },
   {
     "prompt": "Reverse the string 'world'",
     "name": "fn_reverse_string",
     "parameters": {
-      "s": "\"'world' 'world' 'world' 'world' 'world' 'world' 'world"
+      "s": "\"'world' 'world' '"
     }
   },
   {
