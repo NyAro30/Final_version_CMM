@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:46:10 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/25 00:57:01 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/26 09:48:43 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -17,33 +17,36 @@ from .models import FunctionDef
 from json import JSONDecodeError
 from llm_sdk.llm_sdk import Small_LLM_Model
 from typing import Any
+import os
+
+VERBOSE = os.environ.get("VERBOSE", "") == "1"
 
 
 def is_valid_number_prefix(s: str) -> bool:
-    
+
     """Return True if s could be a prefix of a valid JSON number."""
-    
+
     if not s:
         return True
-    
+
     if not all(c in "0123456789.+-eE" for c in s):
         return False
-    
+
     if s[0] not in "0123456789-":
         return False
-    
+
     if s in ("+", "-", "e", "E", "+e", "-e", "."):
         return True
 
     if '-' in s[1:] and 'e' not in s[:s.index('-', 1)].lower():
         return False
-    
+
     if s.count('-') > 1 or s.count('.') > 1:
         return False
-    
+
     if s.lower().count('e') > 1:
         return False
-    
+
     return True
 
 
@@ -157,10 +160,12 @@ def generate_parameter_value(
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(
-            f"Step {i + 1}: token_id={next_id},"
-            f"decoded={model.decode([next_id])!r}"
-        )
+
+        if VERBOSE:
+            print(
+                f"Step {i + 1}: token_id={next_id},"
+                f"decoded={model.decode([next_id])!r}"
+            )
 
         if len(generated_ids) >= 6:
             for pattern_len in [2, 3, 4]:
@@ -168,8 +173,9 @@ def generate_parameter_value(
                     last = generated_ids[-pattern_len:]
                     prev = generated_ids[-pattern_len * 2: -pattern_len]
                     if last == prev:
-                        print(f"Loop detected (pattern {pattern_len},"
-                              f" stopping.)")
+                        if VERBOSE:
+                            print(f"Loop detected (pattern {pattern_len},"
+                                  f" stopping.)")
                         break
             else:
                 continue
@@ -217,7 +223,7 @@ def generate_function_name(
         logits = model.get_logits_from_input_ids(ids)
         name_prefix = model.decode(generated_ids)
 
-        valid = []
+        valid: list[int] = []
         for token_id, token_str in vocab.items():
             new_prefix = name_prefix + token_str
             if any(fn.startswith(new_prefix) for fn in function_names):
@@ -233,8 +239,10 @@ def generate_function_name(
 
         ids.append(next_id)
         generated_ids.append(next_id)
-        print(f"Step {i+1}: token_id={next_id},"
-              f"decoded={model.decode([next_id])!r}")
+
+        if VERBOSE:
+            print(f"Step {i+1}: token_id={next_id},"
+                  f"decoded={model.decode([next_id])!r}")
 
         name_prefix = model.decode(generated_ids)
         if name_prefix in function_names:
@@ -270,20 +278,6 @@ def load_functions(path: str) -> dict[str, dict[str, Any]]:
         except Exception as err:
             print(f"Invalid function definition: {err}")
     return functions_dict
-
-
-def load_vocab(model: Small_LLM_Model) -> dict[int, str]:
-    vocab_path = model.get_path_to_vocab_file()
-    with open(vocab_path, "r", encoding="utf-8") as f:
-        raw_vocab = json.load(f)
-
-    decoded: dict[int, str] = {}
-    total = len(raw_vocab)
-    for i, (token_str, token_id) in enumerate(raw_vocab.items()):
-        decoded[token_id] = model.decode([token_id])
-        if i % 10000 == 0:
-            print(f"Decoding vocab: {i}/{total}")
-    return decoded
 
 
 def generate_function_call(

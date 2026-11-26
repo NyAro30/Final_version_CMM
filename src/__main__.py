@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/20 19:45:29 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/25 00:54:46 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/26 09:50:46 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -45,6 +45,7 @@ def main() -> None:
         default="data/output/function_calling_results.json",
         help="Path to output JSON file.",
     )
+
     args = parser.parse_args()
 
     functions = load_functions(args.functions_definition)
@@ -52,7 +53,6 @@ def main() -> None:
     if not functions:
         print("Error: no functions loaded")
         return
-
 
     try:
         model = Small_LLM_Model(device="cpu")
@@ -64,7 +64,7 @@ def main() -> None:
     try:
         with open(args.input, "r", encoding="utf-8") as f:
             raw_prompts = json.load(f)
-    except (FileExistsError, json.JSONDecodeError) as err:
+    except (FileNotFoundError, json.JSONDecodeError) as err:
         print(f"Error reading input: {err}")
         return
 
@@ -92,7 +92,7 @@ def main() -> None:
                 name=call["name"],
                 parameters=call["parameters"],
             )
-            results.append(result.model_dump())  # ← reconvertit en dict
+            results.append(result.model_dump())
         except Exception as err:
             print(f"Invalid result for '{user_request}': {err}")
             results.append({
