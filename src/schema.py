@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/26 13:10:41 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/26 16:24:54 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/28 01:19:45 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -52,6 +52,9 @@ def generate_parameter_value(
 ) -> str:
 
     """Generate one JSON scalar while masking tokens that violate its type."""
+
+    if param_type == "integer":
+        param_type = "number"
 
     validators = {
         "number": is_valid_number_prefix,
@@ -261,7 +264,9 @@ def generate_function_call(
     )
     object_prefix = "{"
     for param_name, param_info in definition.get("parameters", {}).items():
-        param_type = param_info["type"]
+        original_type = param_info["type"]
+        gen_type = "number" if original_type in ("integer", "float") else original_type
+
         if parameters:
             object_prefix += ", "
         object_prefix += f"{json.dumps(param_name)}: "
@@ -270,19 +275,23 @@ def generate_function_call(
                 model,
                 vocab,
                 value_prompt,
-                param_type,
+                gen_type,
                 assistant_prefix=object_prefix,
             )
         )
-        if param_type == "number" and (
+        if gen_type == "number" and (
             isinstance(value, bool) or not isinstance(value, (int, float))
         ):
             raise ValueError(f"Invalid number argument {param_name!r}")
-        if param_type == "number":
+        
+        if original_type == "integer":
+            value = int(value)
+        elif original_type == "number":
             value = float(value)
-        if param_type == "string" and not isinstance(value, str):
+        
+        if original_type == "string" and not isinstance(value, str):
             raise ValueError(f"Invalid string argument {param_name!r}")
-        if param_type == "boolean" and not isinstance(value, bool):
+        if original_type == "boolean" and not isinstance(value, bool):
             raise ValueError(f"Invalid boolean argument {param_name!r}")
         parameters[param_name] = value
         object_prefix += json.dumps(value, ensure_ascii=False)

@@ -7,7 +7,7 @@
 #   By: mny-aro- <mny-aro-@student.42antananarivo.   +#+  +:+       +#+       #
 #                                                  +#+#+#+#+#+   +#+          #
 #   Created: 2026/11/22 20:05:17 by mny-aro-            #+#    #+#            #
-#   Updated: 2026/11/26 11:06:28 by mny-aro-           ###   ########.fr      #
+#   Updated: 2026/11/28 00:54:02 by mny-aro-           ###   ########.fr      #
 #                                                                             #
 # ########################################################################### #
 
@@ -54,7 +54,7 @@ class ParameterDef(BaseModel):
 
     """Definition of a single function parameter."""
 
-    type: Literal["number", "string", "boolean"] = Field(
+    type: Literal["number", "string", "boolean", "integer"] = Field(
         description="Parameter type"
     )
 
