@@ -42,9 +42,8 @@ or calculate its return value.
 
 The supplied `llm_sdk` loads Qwen through PyTorch and Transformers. These
 packages are included as runtime dependencies so the program can run with the
-provided SDK. This follows the executable SDK requirement, but conflicts with
-the subject's separate restriction on PyTorch, Transformers, and Hugging Face
-dependencies. Confirm with the project evaluator which instruction takes
+provided SDK. This follows the executable SDK requirement
+Confirm with the project evaluator which instruction takes
 precedence.
 
 ### Installation
